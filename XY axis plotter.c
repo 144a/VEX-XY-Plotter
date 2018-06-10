@@ -11,6 +11,12 @@
 const int PENSPEED = 10;
 const int AXISSPEED = 10;
 
+// Scalar value to modify the function's output to better fit the field
+const float SCALE = 1.0;
+
+// Interval by which the x value increases when evaluating the function
+const float INTERVAL = 1.0;
+
 // X and y axis range (will always have a lowest value of zero)
 // The max number these can be set to is +/-32768, as they must be an int value to compare correctly
 const int XAXISMAX = 10000;
@@ -71,6 +77,20 @@ int gcd(int a, int b) {
 	r--;
 	return gcd(b, a - (r * b));
 }
+
+// Function to evaluate the current equation
+// Takes the current x value and returns the respective output
+// Will return null if the value falls outside the current defined work area
+float evalFunction(int val) {
+	float xval = (float)(val);
+	float ans = xval * xval + 4.0 * xval + 4.0;
+	if(ans < 0 || ans > YAXISMAX) {
+		return NULL;
+	}
+	return (int)(ans * SCALE);
+
+}
+
 
 
 
@@ -152,14 +172,15 @@ void moveToPoint(int x2, int y2) {
 
 // Uses limit switches on both the x and y axes to determine the bottom left corner of the plane
 // Is always run on startup and for whenever a new function is to be graphed
+// Needs the code for reseting the pen. Will be completed when a reliable pen design can be created
 void calibrate() {
 	motor[xAxis] = -10;
 	motor[yAxis] = -10;
-	while(SensorValue[xAxisLimit] != 0 && SensorValue[yAxisLimit] != 0) {
-		if(SensorValue[xAxisLimit] == 0) {
+	while(SensorValue[xAxisLimit] != 1 && SensorValue[yAxisLimit] != 1) {
+		if(SensorValue[xAxisLimit] == 1) {
 			motor[xAxis] = 0;
 		}
-		if(SensorValue[yAxisLimit] == 0) {
+		if(SensorValue[yAxisLimit] == 1) {
 			motor[yAxis] = 0;
 		}
 	}
@@ -172,9 +193,28 @@ void calibrate() {
 // The main loop will be able to handle taking a mathimatical function and generating points that will then be passed to other functions to move the pen
 // Hopefully there will be the integeration of the vex lcd screen to both view the current fucntion and its progress
 // There might also be an addition of polar coordinates after testing the limitations of the trigonometric functions
-task main()
-{
+task main() {
 
+	// Set up the pen in the bottom left corner and zero encoders
+	calibrate();
 
+	// Evaluate each individual x value based on a set interval. defined by a constant
+	// Will end loop as soon as predicted x or y value will lie outside of the defined working area
+	float x = 0;
+	while(evalFunction(x) != NULL) {
+
+		// Checks to see whether the next point is a vertical or horizontal shift by +/-1 tick,. and uses the correct function accordingly
+		if((int)(x * SCALE) <= SensorValue[xAxisEncoder] + 1 && (int)(x * SCALE) >= SensorValue[xAxisEncoder] - 1) {
+			moveVert(evalFunction(x));
+		} else if(evalFunction(x) <= SensorValue[yAxisEncoder] + 1 && evalFunction(x) >= SensorValue[yAxisEncoder] - 1) {
+			moveHoriz((int)(x * SCALE));
+		} else {
+			moveToPoint((int)(x * SCALE), evalFunction(x));
+		}
+		x = x + INTERVAL;
+	}
+
+	// Runs the calibration function one last time to reset its self in preparation for a future operation
+	calibrate();
 
 }
